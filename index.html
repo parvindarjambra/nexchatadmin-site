@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NexChat Admin</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;margin:0;color:#0f2040;background:#fff}
+header{background:#0b2a5b;color:#fff;padding:24px;text-align:center}
+main{max-width:760px;margin:0 auto;padding:20px}
+input,select{width:100%;padding:10px;margin:6px 0;box-sizing:border-box}
+button{background:#0b2a5b;color:#fff;padding:12px 20px;border:0;border-radius:8px;font-weight:700;cursor:pointer;margin:6px 4px 6px 0}
+button.green{background:#1a7a3a} button.red{background:#a11}
+table{width:100%;border-collapse:collapse;margin-top:14px} td,th{border:1px solid #ddd;padding:8px;text-align:left;font-size:14px}
+.ok{color:#1a7a3a;font-weight:700} .bad{color:#a11;font-weight:700}
+#admin{display:none}
+.note{background:#fff7e6;padding:12px;border-radius:8px}
+</style>
+</head>
+<body>
+<header><h1>NexChat Admin</h1><p>Payment Approval — Auto Check</p></header>
+<main>
+<div id="login">
+<p>Admin password dalo:</p>
+<input id="pin" type="password" placeholder="Password">
+<button onclick="login()">Open Admin</button>
+<p class="note">Sirf admin ke liye hai. Password ke baghair andar kuch nahi dikhega — na list, na payment, na approval. Ye site main website par kahin link nahi hai, aur search engine ko bhi isay na dikhane ka keh diya gaya hai.</p>
+</div>
+<div id="admin">
+<p class="note"><b>Daily sham ka kaam:</b> EasyPaisa account ka statement check karo. Jis bande ka paisa statement mein <b>na mile</b>, us ki row mein <b>Block</b> dabao — wo block ho jayega, us ka connection lock ho jayega, aur us ki TRX ID dobara kabhi nahi chalegi. Jiska paisa mil jaye, usay Accepted hi rehne do.</p>
+<h2>Payment submit karo / check karo</h2>
+<input id="pname" placeholder="Kis ne pay kiya — naam">
+<input id="pnumber" placeholder="Number (03xx…)">
+<input id="ptrx" placeholder="TRX ID (Transaction ID)">
+<input id="pamount" type="number" placeholder="Amount — Rs (50 hona chahiye)">
+<select id="ptype"><option value="Contact">Contact (1 connection)</option><option value="Group">Group (1 connection)</option></select>
+<button class="green" onclick="autoCheck()">Auto Check — Accept / Reject</button>
+<p id="verdict"></p>
+<p class="note"><b>Auto check kya check karta hai:</b> (1) TRX ID khali to nahi, (2) Amount Rs 50 hai ya nahi, (3) Ye TRX ID pehle to use nahi hui (duplicate = fake), (4) TRX ID kam se kam 8 characters ki hai ya nahi.<br>
+<b>Sachai:</b> Ye auto check EasyPaisa ke bank account se TRX ID ko verify NAHI kar sakta — bank ka record sirf EasyPaisa account statement mein dikhta hai. Is liye Accept yahan <b>provisional</b> hai: auto rules pass hone par connection unlock ho jata hai, lekin final paisa confirm karne ke liye admin ko EasyPaisa account mein transaction dekhna chahiye. Agar statement mein paisa nahi mila, to us TRX ID ko Reject karke block kar do.</p>
+<h2>Payments list — kis ne kya submit kiya</h2>
+<table><thead><tr><th>Naam</th><th>Number</th><th>TRX ID</th><th>Amount</th><th>Type</th><th>Status</th><th>Action</th></tr></thead><tbody id="list"></tbody></table>
+<p><button onclick="clearAll()">List clear karo</button></p>
+<h2>Accept par kya hoga / Reject par kya hoga</h2>
+<ul>
+<li><b>Accept:</b> Us user ka connection unlock ho jata hai — wo chat/group shuru kar sakta hai, us ka package active ho jata hai, aur doosri taraf ka jawab FREE ho jata hai.</li>
+<li><b>Reject:</b> Connection LOCKED rehta hai — user chat nahi kar sakta, usay dobara sahi TRX ID ke saath pay karna parega, aur ye TRX ID dobara use nahi ho sakti (duplicate = reject).</li>
+<li><b>Block (sham ko check ke baad):</b> Auto accept ke baad bhi agar EasyPaisa statement mein paisa na mile, to Block dabao — us bande ka connection lock ho jata hai, wo dobara us TRX ID se chat nahi kar sakta, aur usay naye TRX ID ke saath dobara pay karna parega.</li>
+</ul>
+</div>
+</main>
+<script>
+function login(){ if(document.getElementById('pin').value==='123++'){ document.getElementById('login').style.display='none'; document.getElementById('admin').style.display='block'; render(); } else { alert('Ghalat password'); } }
+function getAll(){ try{ return JSON.parse(localStorage.getItem('nexchat_payments')||'[]'); }catch(e){ return []; } }
+function saveAll(a){ localStorage.setItem('nexchat_payments', JSON.stringify(a)); }
+function render(){
+  var rows = getAll(); var tb = document.getElementById('list'); tb.innerHTML = '';
+  if(!rows.length){ tb.innerHTML = '<tr><td colspan="7">Abhi koi payment submit nahi hui.</td></tr>'; return; }
+  rows.forEach(function(r,i){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+r.name+'</td><td>'+r.number+'</td><td>'+r.trx+'</td><td>'+r.amount+'</td><td>'+r.type+'</td><td class="'+(r.status==='Accepted'?'ok':'bad')+'">'+r.status+'</td><td><button onclick="setStatus('+i+',\'Accepted\')">Accept</button> <button class="red" onclick="setStatus('+i+',\'Rejected\')">Reject</button> <button class="red" onclick="setStatus('+i+',\'Blocked\')">Block</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function setStatus(i,s){ var a=getAll(); a[i].status=s; saveAll(a); render(); }
+function clearAll(){ if(confirm('Saari list clear kar dun?')){ localStorage.removeItem('nexchat_payments'); render(); } }
+function autoCheck(){
+  var name=document.getElementById('pname').value.trim();
+  var number=document.getElementById('pnumber').value.trim();
+  var trx=document.getElementById('ptrx').value.trim();
+  var amount=parseInt(document.getElementById('pamount').value,10);
+  var type=document.getElementById('ptype').value;
+  var v=document.getElementById('verdict');
+  if(!name || !number){ v.innerHTML='<span class="bad">Reject: naam + number likho.</span>'; return; }
+  if(!trx){ v.innerHTML='<span class="bad">Reject: TRX ID khali hai — fake/missing.</span>'; save(name,number,trx,amount,type,'Rejected'); return; }
+  if(amount!==50){ v.innerHTML='<span class="bad">Reject: amount Rs '+amount+' hai, Rs 50 hona chahiye.</span>'; save(name,number,trx,amount,type,'Rejected'); return; }
+  if(trx.length<8){ v.innerHTML='<span class="bad">Reject: TRX ID bahut chhoti hai — fake lag rahi hai.</span>'; save(name,number,trx,amount,type,'Rejected'); return; }
+  var dup=getAll().some(function(r){ return r.trx===trx; });
+  if(dup){ v.innerHTML='<span class="bad">Reject: ye TRX ID pehle use ho chuki hai — duplicate / fake.</span>'; save(name,number,trx,amount,type,'Rejected'); return; }
+  v.innerHTML='<span class="ok">Accepted (provisional): auto rules pass — TRX ID maujood hai, amount Rs 50 hai, duplicate nahi hai. Connection unlock ho gaya. Final paisa EasyPaisa statement mein zaroor check karo.</span>';
+  save(name,number,trx,amount,type,'Accepted');
+}
+function save(name,number,trx,amount,type,status){ var a=getAll(); a.unshift({name:name,number:number,trx:trx,amount:amount,type:type,status:status}); saveAll(a); render(); }
+</script>
+</body>
+</html>
